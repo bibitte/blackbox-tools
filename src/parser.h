@@ -160,7 +160,7 @@ typedef struct flightLog_t {
     gpsHFieldIndexes_t gpsHomeFieldIndexes;
     slowFieldIndexes_t slowFieldIndexes;
 
-    struct flightLogPrivate_t *private;
+    struct flightLogPrivate_t *privateLog;
 } flightLog_t;
 
 typedef void (*FlightLogMetadataReady)(flightLog_t *log);

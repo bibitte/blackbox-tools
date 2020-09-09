@@ -418,7 +418,7 @@ static void parseHeaderLine(flightLog_t *log, mmapStream_t *stream)
             log->frameIntervalPDenom = atoi(slashPos + 1);
         }
     } else if (strcmp(fieldName, "Data version") == 0) {
-        log->private->dataVersion = atoi(fieldValue);
+        log->privateLog->dataVersion = atoi(fieldValue);
     } else if (strcmp(fieldName, "Firmware type") == 0) {
         if (strcmp(fieldValue, "Cleanflight") == 0)
             log->sysConfig.firmwareType = FIRMWARE_TYPE_CLEANFLIGHT;
@@ -491,7 +491,7 @@ static int shouldHaveFrame(flightLog_t *log, int32_t frameIndex)
  */
 static int64_t applyPrediction(flightLog_t *log, int fieldIndex, int predictor, int64_t value, int64_t *current, int64_t *previous, int64_t *previous2)
 {
-    flightLogPrivate_t *private = log->private;
+    flightLogPrivate_t *private = log->privateLog;
 
     // First see if we have a prediction that doesn't require a previous frame as reference:
     switch (predictor) {
@@ -613,7 +613,7 @@ static void parseFrame(flightLog_t *log, mmapStream_t *stream, uint8_t frameType
                 case FLIGHT_LOG_FIELD_ENCODING_TAG8_4S16:
                     streamByteAlign(stream);
 
-                    if (log->private->dataVersion < 2)
+                    if (log->privateLog->dataVersion < 2)
                         streamReadTag8_4S16_v1(stream, values);
                     else
                         streamReadTag8_4S16_v2(stream, values);
@@ -704,7 +704,7 @@ static void parseFrame(flightLog_t *log, mmapStream_t *stream, uint8_t frameType
  */
 static uint32_t countIntentionallySkippedFrames(flightLog_t *log)
 {
-    flightLogPrivate_t *private = log->private;
+    flightLogPrivate_t *private = log->privateLog;
     uint32_t count = 0, frameIndex;
 
     if (private->lastMainFrameIteration == (uint32_t) -1) {
@@ -725,7 +725,7 @@ static uint32_t countIntentionallySkippedFrames(flightLog_t *log)
  */
 static uint32_t countIntentionallySkippedFramesTo(flightLog_t *log, uint32_t targetIteration)
 {
-    flightLogPrivate_t *private = log->private;
+    flightLogPrivate_t *private = log->privateLog;
     uint32_t count = 0, frameIndex;
 
     if (private->lastMainFrameIteration == (uint32_t) -1) {
@@ -747,7 +747,7 @@ static uint32_t countIntentionallySkippedFramesTo(flightLog_t *log, uint32_t tar
  */
 static void parseIntraframe(flightLog_t *log, mmapStream_t *stream, bool raw)
 {
-    flightLogPrivate_t *private = log->private;
+    flightLogPrivate_t *private = log->privateLog;
 
     int64_t *current = private->mainHistory[0];
     int64_t *previous = private->mainHistory[1];
@@ -760,34 +760,34 @@ static void parseIntraframe(flightLog_t *log, mmapStream_t *stream, bool raw)
  */
 static void parseInterframe(flightLog_t *log, mmapStream_t *stream, bool raw)
 {
-    flightLogPrivate_t *private = log->private;
+    flightLogPrivate_t *private = log->privateLog;
 
-    int64_t *current = log->private->mainHistory[0];
-    int64_t *previous = log->private->mainHistory[1];
-    int64_t *previous2 = log->private->mainHistory[2];
+    int64_t *current = log->privateLog->mainHistory[0];
+    int64_t *previous = log->privateLog->mainHistory[1];
+    int64_t *previous2 = log->privateLog->mainHistory[2];
 
     private->lastSkippedFrames = countIntentionallySkippedFrames(log);
 
-    parseFrame(log, stream, 'P', current, previous, previous2, log->private->lastSkippedFrames, raw);
+    parseFrame(log, stream, 'P', current, previous, previous2, log->privateLog->lastSkippedFrames, raw);
 }
 
 static void parseGPSFrame(flightLog_t *log, mmapStream_t *stream, bool raw)
 {
-    parseFrame(log, stream, 'G', log->private->lastGPS, NULL, NULL, 0, raw);
+    parseFrame(log, stream, 'G', log->privateLog->lastGPS, NULL, NULL, 0, raw);
 }
 
 static void parseGPSHomeFrame(flightLog_t *log, mmapStream_t *stream, bool raw)
 {
-    parseFrame(log, stream, 'H', log->private->gpsHomeHistory[0], NULL, NULL, 0, raw);
+    parseFrame(log, stream, 'H', log->privateLog->gpsHomeHistory[0], NULL, NULL, 0, raw);
 }
 
 static void parseSlowFrame(flightLog_t *log, mmapStream_t *stream, bool raw)
 {
-    parseFrame(log, stream, 'S', log->private->lastSlow, NULL, NULL, 0, raw);
+    parseFrame(log, stream, 'S', log->privateLog->lastSlow, NULL, NULL, 0, raw);
 }
 
 /**
- * Attempt to parse an event frame at the current location into the log->private->lastEvent struct.
+ * Attempt to parse an event frame at the current location into the log->privateLog->lastEvent struct.
  * Return false if the event couldn't be parsed (e.g. unknown event ID), or true if it might have been
  * parsed successfully.
  */
@@ -800,12 +800,12 @@ static void parseEventFrame(flightLog_t *log, mmapStream_t *stream, bool raw)
     (void) raw;
     uint8_t eventType = streamReadByte(stream);
 
-    flightLogEventData_t *data = &log->private->lastEvent.data;
-    log->private->lastEvent.event = eventType;
+    flightLogEventData_t *data = &log->privateLog->lastEvent.data;
+    log->privateLog->lastEvent.event = eventType;
 
     switch (eventType) {
         case FLIGHT_LOG_EVENT_SYNC_BEEP:
-            data->syncBeep.time = streamReadUnsignedVB(stream) + log->private->timeRolloverAccumulator;
+            data->syncBeep.time = streamReadUnsignedVB(stream) + log->privateLog->timeRolloverAccumulator;
         break;
         case FLIGHT_LOG_EVENT_AUTOTUNE_CYCLE_START:
             data->autotuneCycleStart.phase = streamReadByte(stream);
@@ -842,7 +842,7 @@ static void parseEventFrame(flightLog_t *log, mmapStream_t *stream, bool raw)
         break;
         case FLIGHT_LOG_EVENT_LOGGING_RESUME:
             data->loggingResume.logIteration = streamReadUnsignedVB(stream);
-            data->loggingResume.currentTime = streamReadUnsignedVB(stream) + log->private->timeRolloverAccumulator;
+            data->loggingResume.currentTime = streamReadUnsignedVB(stream) + log->privateLog->timeRolloverAccumulator;
         break;
         case FLIGHT_LOG_EVENT_LOG_END:
             streamRead(stream, endMessage, END_OF_LOG_MESSAGE_LEN);
@@ -855,11 +855,11 @@ static void parseEventFrame(flightLog_t *log, mmapStream_t *stream, bool raw)
                  * This isn't the real end of log message, it's probably just some bytes that happened to look like
                  * an event header.
                  */
-                log->private->lastEvent.event = -1;
+                log->privateLog->lastEvent.event = -1;
             }
         break;
         default:
-            log->private->lastEvent.event = -1;
+            log->privateLog->lastEvent.event = -1;
     }
 }
 
@@ -1060,7 +1060,7 @@ flightLog_t * flightLogCreate(int fd)
      */
     log->logBegin[log->logCount] = private->stream->data + private->stream->size;
 
-    log->private = private;
+    log->privateLog = private;
 
     return log;
 }
@@ -1080,7 +1080,7 @@ static const flightLogFrameType_t* getFrameType(uint8_t c)
  */
 static bool flightLogValidateMainFrameValues(flightLog_t *log)
 {
-    flightLogPrivate_t *private = log->private;
+    flightLogPrivate_t *private = log->privateLog;
 
     // Check that iteration count and time didn't move backwards, and didn't move forward too much.
     return
@@ -1092,9 +1092,9 @@ static bool flightLogValidateMainFrameValues(flightLog_t *log)
 
 static void flightLogInvalidateStream(flightLog_t *log)
 {
-    log->private->mainStreamIsValid = false;
-    log->private->mainHistory[1] = 0;
-    log->private->mainHistory[2] = 0;
+    log->privateLog->mainStreamIsValid = false;
+    log->privateLog->mainHistory[1] = 0;
+    log->privateLog->mainHistory[2] = 0;
 }
 
 /**
@@ -1105,24 +1105,24 @@ static void flightLogInvalidateStream(flightLog_t *log)
  */
 static int64_t flightLogDetectAndApplyTimestampRollover(flightLog_t *log, int64_t timestamp)
 {
-    if (log->private->lastMainFrameTime != -1) {
+    if (log->privateLog->lastMainFrameTime != -1) {
         if (
             // If we appeared to travel backwards in time (modulo 32 bits)...
-            (uint32_t) timestamp < (uint32_t) log->private->lastMainFrameTime
+            (uint32_t) timestamp < (uint32_t) log->privateLog->lastMainFrameTime
             // But we actually just incremented a reasonable amount (modulo 32-bits)...
-            && (uint32_t) ((uint32_t) timestamp - (uint32_t) log->private->lastMainFrameTime) < MAXIMUM_TIME_JUMP_BETWEEN_FRAMES
+            && (uint32_t) ((uint32_t) timestamp - (uint32_t) log->privateLog->lastMainFrameTime) < MAXIMUM_TIME_JUMP_BETWEEN_FRAMES
         ) {
             // 32-bit time counter has wrapped, so add 2^32 to the timestamp
-            log->private->timeRolloverAccumulator += 0x100000000LL;
+            log->privateLog->timeRolloverAccumulator += 0x100000000LL;
         }
     }
 
-    return (uint32_t) timestamp + log->private->timeRolloverAccumulator;
+    return (uint32_t) timestamp + log->privateLog->timeRolloverAccumulator;
 }
 
 static void flightLogApplyMainFrameTimeRollover(flightLog_t *log)
 {
-    log->private->mainHistory[0][FLIGHT_LOG_FIELD_INDEX_TIME] = flightLogDetectAndApplyTimestampRollover(log, log->private->mainHistory[0][FLIGHT_LOG_FIELD_INDEX_TIME]);
+    log->privateLog->mainHistory[0][FLIGHT_LOG_FIELD_INDEX_TIME] = flightLogDetectAndApplyTimestampRollover(log, log->privateLog->mainHistory[0][FLIGHT_LOG_FIELD_INDEX_TIME]);
 }
 
 static void flightLogApplyGPSFrameTimeRollover(flightLog_t *log)
@@ -1130,13 +1130,13 @@ static void flightLogApplyGPSFrameTimeRollover(flightLog_t *log)
 	int timeFieldIndex = log->gpsFieldIndexes.time;
 
 	if (timeFieldIndex != -1) {
-		log->private->lastGPS[timeFieldIndex] = flightLogDetectAndApplyTimestampRollover(log, log->private->lastGPS[timeFieldIndex]);
+		log->privateLog->lastGPS[timeFieldIndex] = flightLogDetectAndApplyTimestampRollover(log, log->privateLog->lastGPS[timeFieldIndex]);
 	}
 }
 
 static bool completeIntraframe(flightLog_t *log, mmapStream_t *stream, uint8_t frameType, const char *frameStart, const char *frameEnd, bool raw)
 {
-    flightLogPrivate_t *private = log->private;
+    flightLogPrivate_t *private = log->privateLog;
 
     flightLogApplyMainFrameTimeRollover(log);
 
@@ -1153,7 +1153,7 @@ static bool completeIntraframe(flightLog_t *log, mmapStream_t *stream, uint8_t f
         private->lastMainFrameIteration = (uint32_t) private->mainHistory[0][FLIGHT_LOG_FIELD_INDEX_ITERATION];
         private->lastMainFrameTime = private->mainHistory[0][FLIGHT_LOG_FIELD_INDEX_TIME];
 
-        updateMainFieldStatistics(log, log->private->mainHistory[0]);
+        updateMainFieldStatistics(log, log->privateLog->mainHistory[0]);
     }
 
     if (private->onFrameReady) {
@@ -1179,7 +1179,7 @@ static bool completeIntraframe(flightLog_t *log, mmapStream_t *stream, uint8_t f
 
 static bool completeInterframe(flightLog_t *log, mmapStream_t *stream, uint8_t frameType, const char *frameStart, const char *frameEnd, bool raw)
 {
-    flightLogPrivate_t *private = log->private;
+    flightLogPrivate_t *private = log->privateLog;
 
     (void) frameType;
     (void) raw;
@@ -1221,7 +1221,7 @@ static bool completeInterframe(flightLog_t *log, mmapStream_t *stream, uint8_t f
 
 static bool completeEventFrame(flightLog_t *log, mmapStream_t *stream, uint8_t frameType, const char *frameStart, const char *frameEnd, bool raw)
 {
-    flightLogEvent_t *lastEvent = &log->private->lastEvent;
+    flightLogEvent_t *lastEvent = &log->privateLog->lastEvent;
 
     (void) stream;
     (void) frameType;
@@ -1237,15 +1237,15 @@ static bool completeEventFrame(flightLog_t *log, mmapStream_t *stream, uint8_t f
                  * Bring the "last time" and "last iteration" up to the new resume time so we accept the sudden jump into
                  * the future.
                  */
-                log->private->lastMainFrameIteration = lastEvent->data.loggingResume.logIteration;
-                log->private->lastMainFrameTime = lastEvent->data.loggingResume.currentTime;
+                log->privateLog->lastMainFrameIteration = lastEvent->data.loggingResume.logIteration;
+                log->privateLog->lastMainFrameTime = lastEvent->data.loggingResume.currentTime;
             break;
             default:
                 ;
         }
 
-        if (log->private->onEvent) {
-            log->private->onEvent(log, lastEvent);
+        if (log->privateLog->onEvent) {
+            log->privateLog->onEvent(log, lastEvent);
         }
 
         return true;
@@ -1262,11 +1262,11 @@ static bool completeGPSHomeFrame(flightLog_t *log, mmapStream_t *stream, uint8_t
     (void) raw;
 
     //Copy the decoded frame into the "last state" entry of gpsHomeHistory to publish it:
-    memcpy(&log->private->gpsHomeHistory[1], &log->private->gpsHomeHistory[0], sizeof(*log->private->gpsHomeHistory));
-    log->private->gpsHomeIsValid = true;
+    memcpy(&log->privateLog->gpsHomeHistory[1], &log->privateLog->gpsHomeHistory[0], sizeof(*log->privateLog->gpsHomeHistory));
+    log->privateLog->gpsHomeIsValid = true;
 
-    if (log->private->onFrameReady) {
-        log->private->onFrameReady(log, true, log->private->gpsHomeHistory[1], frameType, log->frameDefs[frameType].fieldCount, frameStart - stream->data, frameEnd - frameStart);
+    if (log->privateLog->onFrameReady) {
+        log->privateLog->onFrameReady(log, true, log->privateLog->gpsHomeHistory[1], frameType, log->frameDefs[frameType].fieldCount, frameStart - stream->data, frameEnd - frameStart);
     }
 
     return true;
@@ -1281,8 +1281,8 @@ static bool completeGPSFrame(flightLog_t *log, mmapStream_t *stream, uint8_t fra
 
 	flightLogApplyGPSFrameTimeRollover(log);
 
-    if (log->private->onFrameReady) {
-        log->private->onFrameReady(log, log->private->gpsHomeIsValid, log->private->lastGPS, frameType, log->frameDefs[frameType].fieldCount, frameStart - stream->data, frameEnd - frameStart);
+    if (log->privateLog->onFrameReady) {
+        log->privateLog->onFrameReady(log, log->privateLog->gpsHomeIsValid, log->privateLog->lastGPS, frameType, log->frameDefs[frameType].fieldCount, frameStart - stream->data, frameEnd - frameStart);
     }
 
     return true;
@@ -1295,8 +1295,8 @@ static bool completeSlowFrame(flightLog_t *log, mmapStream_t *stream, uint8_t fr
     (void) frameEnd;
     (void) raw;
 
-    if (log->private->onFrameReady) {
-        log->private->onFrameReady(log, true, log->private->lastSlow, frameType, log->frameDefs[frameType].fieldCount, frameStart - stream->data, frameEnd - frameStart);
+    if (log->privateLog->onFrameReady) {
+        log->privateLog->onFrameReady(log, true, log->privateLog->lastSlow, frameType, log->frameDefs[frameType].fieldCount, frameStart - stream->data, frameEnd - frameStart);
     }
 
     return true;
@@ -1337,7 +1337,7 @@ bool flightLogParse(flightLog_t *log, int logIndex, FlightLogMetadataReady onMet
     const char *frameStart = 0;
     const flightLogFrameType_t *frameType = 0, *lastFrameType = 0;
 
-    flightLogPrivate_t *private = log->private;
+    flightLogPrivate_t *private = log->privateLog;
 
     if (logIndex < 0 || logIndex >= log->logCount)
         return false;
@@ -1447,7 +1447,7 @@ bool flightLogParse(flightLog_t *log, int logIndex, FlightLogMetadataReady onMet
                         bool frameAccepted = true;
 
                         if (lastFrameType->complete)
-                            frameAccepted = lastFrameType->complete(log, log->private->stream, lastFrameType->marker, frameStart, frameEnd, raw);
+                            frameAccepted = lastFrameType->complete(log, log->privateLog->stream, lastFrameType->marker, frameStart, frameEnd, raw);
 
                         if (frameAccepted) {
                             //Update statistics for this frame type
@@ -1511,12 +1511,12 @@ bool flightLogParse(flightLog_t *log, int logIndex, FlightLogMetadataReady onMet
 
 void flightLogDestroy(flightLog_t *log)
 {
-    streamDestroy(log->private->stream);
+    streamDestroy(log->privateLog->stream);
 
     for (int i = 0; i < 256; i++) {
         free(log->frameDefs[i].namesLine);
     }
 
-    free(log->private);
+    free(log->privateLog);
     free(log);
 }
